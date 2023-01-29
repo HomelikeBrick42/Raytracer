@@ -89,7 +89,7 @@ void main() {
     const SAMPLES_PER_BOUNCE: usize = 2;
     const BOUNCES: usize = 5;
 
-    let mut camera_position: Vector3<f32> = (0.0, 1.0, -3.0).into();
+    let mut camera_position: Vector3<f32> = (0.0, 1.4, -2.0).into();
     let camera_right: Vector3<f32> = (1.0, 0.0, 0.0).into();
     let camera_up: Vector3<f32> = (0.0, 1.0, 0.0).into();
     let camera_forward: Vector3<f32> = (0.0, 0.0, 1.0).into();
@@ -104,12 +104,21 @@ void main() {
             },
         },
         Object::Sphere {
-            center: (0.0, 1.0, 0.0).into(),
-            radius: (1.0),
+            center: (-1.0, 1.0, 0.0).into(),
+            radius: 1.0,
             material: Material {
                 diffuse_color: (0.8, 0.3, 0.2).into(),
                 emit_color: (0.0, 0.0, 0.0).into(),
                 reflectiveness: 0.0,
+            },
+        },
+        Object::Sphere {
+            center: (1.5, 1.0, 0.0).into(),
+            radius: 1.0,
+            material: Material {
+                diffuse_color: (0.95, 0.95, 0.95).into(),
+                emit_color: (0.0, 0.0, 0.0).into(),
+                reflectiveness: 0.95,
             },
         },
     ];
