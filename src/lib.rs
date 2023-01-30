@@ -1,5 +1,5 @@
 use rand::Rng;
-use thallium::math::{Vector3, Zero};
+use thallium::math::{Vector2, Vector3, Zero};
 
 #[derive(Clone, Copy)]
 pub struct Ray {
@@ -97,8 +97,42 @@ impl Object {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct Camera {
+    pub position: Vector3<f32>,
+    pub right: Vector3<f32>,
+    pub up: Vector3<f32>,
+    pub forward: Vector3<f32>,
+}
+
+impl Camera {
+    pub fn get_uv(
+        Vector2 { x, y }: Vector2<usize>,
+        Vector2 {
+            x: width,
+            y: height,
+        }: Vector2<usize>,
+    ) -> Vector2<f32> {
+        Vector2 {
+            x: x as f32 / width as f32,
+            y: y as f32 / height as f32,
+        }
+    }
+
+    pub fn get_ray(&self, uv: Vector2<f32>, aspect: f32) -> Ray {
+        Ray {
+            origin: self.position,
+            direction: ((self.right * ((uv.x * 2.0 - 1.0) * aspect).into())
+                + (self.up * (uv.y * 2.0 - 1.0).into())
+                + self.forward)
+                .normalized(),
+        }
+    }
+}
+
 pub const SAMPLES_PER_BOUNCE: usize = 2;
 pub const BOUNCES: usize = 5;
+pub const DAY: bool = false;
 
 pub fn get_closest_object(ray: Ray, objects: &[Object]) -> Option<Hit> {
     objects.iter().fold(None, |hit, object| {
@@ -161,9 +195,13 @@ pub fn ray_trace(
 
         hit.material.emit_color + hit.material.diffuse_color * in_color
     } else {
-        let t = ray.direction.y * 0.5 + 0.5;
-        let up_color: Vector3<f32> = (1.0, 1.0, 1.0).into();
-        let down_color: Vector3<f32> = (0.5, 0.7, 1.0).into();
-        up_color * (1.0 - t).into() + down_color * t.into()
+        if DAY {
+            let t = ray.direction.y * 0.5 + 0.5;
+            let up_color: Vector3<f32> = (1.0, 1.0, 1.0).into();
+            let down_color: Vector3<f32> = (0.5, 0.7, 1.0).into();
+            up_color * (1.0 - t).into() + down_color * t.into()
+        } else {
+            (0.1, 0.1, 0.1).into()
+        }
     }
 }

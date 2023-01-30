@@ -5,10 +5,12 @@ use rayon::{
     prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
     slice::ParallelSliceMut,
 };
-use raytracer::{ray_trace, Material, Object, Ray, BOUNCES, SAMPLES_PER_BOUNCE};
+use raytracer::{
+    get_closest_object, ray_trace, Camera, Material, Object, BOUNCES, SAMPLES_PER_BOUNCE,
+};
 use thallium::{
     math::{Matrix4x4, One, Vector2, Vector3, Zero},
-    platform::{Keycode, Surface, SurfaceEvent},
+    platform::{Keycode, MouseButton, Surface, SurfaceEvent},
     renderer::{Pixels, PrimitiveType, RendererAPI, VertexBufferElement},
     slice_to_bytes,
 };
@@ -86,11 +88,14 @@ void main() {
         (pixels, texture)
     };
 
-    let mut camera_position: Vector3<f32> = (0.0, 1.4, -2.0).into();
-    let camera_right: Vector3<f32> = (1.0, 0.0, 0.0).into();
-    let camera_up: Vector3<f32> = (0.0, 1.0, 0.0).into();
-    let camera_forward: Vector3<f32> = (0.0, 0.0, 1.0).into();
-    let objects = [
+    let mut camera = Camera {
+        position: (0.0, 1.4, -2.0).into(),
+        right: (1.0, 0.0, 0.0).into(),
+        up: (0.0, 1.0, 0.0).into(),
+        forward: (0.0, 0.0, 1.0).into(),
+    };
+
+    let mut objects = vec![
         Object::Plane {
             normal: (0.0, 1.0, 0.0).into(),
             distance_along_normal: 0.0,
@@ -132,6 +137,12 @@ void main() {
         print!("{:.3}ms          \r", dt * 1000.0);
         std::io::stdout().flush().unwrap();
 
+        let size @ Vector2 {
+            x: width,
+            y: height,
+        } = renderer.get_surface_mut().get_size();
+        let aspect = width as f32 / height as f32;
+
         for event in renderer.get_surface_mut().events() {
             match event {
                 SurfaceEvent::Close => break 'main_loop,
@@ -145,41 +156,62 @@ void main() {
                     pixels = vec![Vector3::zero(); width * height];
                     frames_since_movement = 0;
                 }
+                SurfaceEvent::MousePressed(button, Vector2 { x, y }) => 'mouse_press_handling: {
+                    if x < 0 && x >= width as isize && y < 0 && y >= height as isize {
+                        break 'mouse_press_handling;
+                    }
+
+                    let coord = (x as usize, height - y as usize - 1).into();
+                    let uv = Camera::get_uv(coord, size);
+                    let ray = camera.get_ray(uv, aspect);
+
+                    match button {
+                        MouseButton::Left => {
+                            if let Some(hit) = get_closest_object(ray, &objects) {
+                                objects.push(Object::Sphere {
+                                    center: hit.position + hit.normal * 0.5.into(),
+                                    radius: 0.5,
+                                    material: Material {
+                                        diffuse_color: (0.0, 0.0, 0.0).into(),
+                                        emit_color: (3.0, 3.0, 3.0).into(),
+                                        reflectiveness: 0.0,
+                                    },
+                                });
+                                frames_since_movement = 0;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 _ => {}
             }
         }
-
-        let size @ Vector2 {
-            x: width,
-            y: height,
-        } = renderer.get_surface_mut().get_size();
-        let aspect = width as f32 / height as f32;
 
         // Update
         {
             let mut moved = false;
             if renderer.get_surface().get_key_state(Keycode::W) {
-                camera_position += camera_forward * dt.into();
+                camera.position += camera.forward * dt.into();
                 moved = true;
             }
             if renderer.get_surface().get_key_state(Keycode::S) {
-                camera_position -= camera_forward * dt.into();
+                camera.position -= camera.forward * dt.into();
                 moved = true;
             }
             if renderer.get_surface().get_key_state(Keycode::A) {
-                camera_position -= camera_right * dt.into();
+                camera.position -= camera.right * dt.into();
                 moved = true;
             }
             if renderer.get_surface().get_key_state(Keycode::D) {
-                camera_position += camera_right * dt.into();
+                camera.position += camera.right * dt.into();
                 moved = true;
             }
             if renderer.get_surface().get_key_state(Keycode::Q) {
-                camera_position -= camera_up * dt.into();
+                camera.position -= camera.up * dt.into();
                 moved = true;
             }
             if renderer.get_surface().get_key_state(Keycode::E) {
-                camera_position += camera_up * dt.into();
+                camera.position += camera.up * dt.into();
                 moved = true;
             }
 
@@ -211,13 +243,7 @@ void main() {
                             x: (x as f32 + rng.gen::<f32>() * 2.0 - 1.0) / width as f32,
                             y: (y as f32 + rng.gen::<f32>() * 2.0 - 1.0) / height as f32,
                         };
-                        let ray = Ray {
-                            origin: camera_position,
-                            direction: ((camera_right * ((uv.x * 2.0 - 1.0) * aspect).into())
-                                + (camera_up * (uv.y * 2.0 - 1.0).into())
-                                + camera_forward)
-                                .normalized(),
-                        };
+                        let ray = camera.get_ray(uv, aspect);
                         color += ray_trace(ray, &objects, &mut rng, BOUNCES);
                     }
                     color *= (1.0 / SAMPLES_PER_BOUNCE as f32).into();
