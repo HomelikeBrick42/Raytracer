@@ -167,7 +167,7 @@ void main() {
 
                     match button {
                         MouseButton::Left => {
-                            if let Some(hit) = get_closest_object(ray, &objects) {
+                            if let Some((hit, _)) = get_closest_object(ray, &objects) {
                                 objects.push(Object::Sphere {
                                     center: hit.position + hit.normal * 0.5.into(),
                                     radius: 0.5,
@@ -178,6 +178,14 @@ void main() {
                                     },
                                 });
                                 frames_since_movement = 0;
+                            }
+                        }
+                        MouseButton::Right => {
+                            if let Some((_, index)) = get_closest_object(ray, &objects) {
+                                if !matches!(objects[index], Object::Plane { .. }) {
+                                    objects.remove(index);
+                                    frames_since_movement = 0;
+                                }
                             }
                         }
                         _ => {}

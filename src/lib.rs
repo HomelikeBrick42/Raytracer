@@ -19,7 +19,6 @@ pub struct Hit {
     pub position: Vector3<f32>,
     pub normal: Vector3<f32>,
     pub distance: f32,
-    pub material: Material,
 }
 
 #[derive(Clone, Copy)]
@@ -37,12 +36,18 @@ pub enum Object {
 }
 
 impl Object {
+    pub fn get_material(&self) -> &Material {
+        match self {
+            Object::Sphere { material, .. } | Object::Plane { material, .. } => material,
+        }
+    }
+
     pub fn intersect(&self, ray: Ray) -> Option<Hit> {
         match *self {
             Object::Sphere {
                 center,
                 radius,
-                material,
+                material: _,
             } => {
                 let oc = ray.origin - center;
                 let a = ray.direction.sqr_length();
@@ -65,13 +70,12 @@ impl Object {
                     position,
                     normal,
                     distance,
-                    material,
                 })
             }
             Object::Plane {
                 normal,
                 distance_along_normal,
-                material,
+                material: _,
             } => {
                 let vd = normal.dot(ray.direction);
                 // vd == 0.0 for double sided, vd >= 0.0 for one sided
@@ -90,7 +94,6 @@ impl Object {
                     position,
                     normal,
                     distance,
-                    material,
                 })
             }
         }
@@ -134,20 +137,23 @@ pub const SAMPLES_PER_BOUNCE: usize = 2;
 pub const BOUNCES: usize = 5;
 pub const DAY: bool = false;
 
-pub fn get_closest_object(ray: Ray, objects: &[Object]) -> Option<Hit> {
-    objects.iter().fold(None, |hit, object| {
-        let new_hit = object.intersect(ray);
-        hit.zip(new_hit).map_or_else(
-            || hit.or(new_hit),
-            |(hit, new_hit)| {
-                if hit.distance < new_hit.distance {
-                    Some(hit)
-                } else {
-                    Some(new_hit)
-                }
-            },
-        )
-    })
+pub fn get_closest_object(ray: Ray, objects: &[Object]) -> Option<(Hit, usize)> {
+    objects
+        .iter()
+        .enumerate()
+        .fold(None, |hit, (index, object)| {
+            let new_hit = object.intersect(ray).map(|new_hit| (new_hit, index));
+            hit.zip(new_hit).map_or_else(
+                || hit.or(new_hit),
+                |(hit, new_hit)| {
+                    if hit.0.distance < new_hit.0.distance {
+                        Some(hit)
+                    } else {
+                        Some(new_hit)
+                    }
+                },
+            )
+        })
 }
 
 pub fn ray_trace(
@@ -162,7 +168,7 @@ pub fn ray_trace(
 
     let hit = get_closest_object(ray, objects);
 
-    if let Some(hit) = hit {
+    if let Some((hit, index)) = hit {
         fn random_in_direction(
             rng: &mut dyn rand::RngCore,
             direction: Vector3<f32>,
@@ -175,6 +181,7 @@ pub fn ray_trace(
             random * random.dot(direction).signum().into()
         }
 
+        let material = objects[index].get_material();
         let direction = ray.direction.reflect(hit.normal);
 
         let mut in_color: Vector3<f32> = Vector3::zero();
@@ -183,8 +190,8 @@ pub fn ray_trace(
                 Ray {
                     origin: hit.position + hit.normal * 0.001.into(),
                     direction: random_in_direction(rng, direction)
-                        * (1.0 - hit.material.reflectiveness).into()
-                        + direction * hit.material.reflectiveness.into(),
+                        * (1.0 - material.reflectiveness).into()
+                        + direction * material.reflectiveness.into(),
                 },
                 objects,
                 rng,
@@ -193,7 +200,7 @@ pub fn ray_trace(
         }
         in_color *= (1.0 / SAMPLES_PER_BOUNCE as f32).into();
 
-        hit.material.emit_color + hit.material.diffuse_color * in_color
+        material.emit_color + material.diffuse_color * in_color
     } else {
         if DAY {
             let t = ray.direction.y * 0.5 + 0.5;
