@@ -133,9 +133,9 @@ impl Camera {
     }
 }
 
-pub const SAMPLES_PER_BOUNCE: usize = 2;
+pub const SAMPLES_PER_BOUNCE: usize = 1;
 pub const BOUNCES: usize = 5;
-pub const DAY: bool = false;
+pub const DAY: bool = true;
 
 pub fn get_closest_object(ray: Ray, objects: &[Object]) -> Option<(Hit, usize)> {
     objects

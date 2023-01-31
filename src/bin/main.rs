@@ -137,63 +137,70 @@ void main() {
         print!("{:.3}ms          \r", dt * 1000.0);
         std::io::stdout().flush().unwrap();
 
+        {
+            let size @ Vector2 {
+                x: width,
+                y: height,
+            } = renderer.get_surface_mut().get_size();
+            let aspect = width as f32 / height as f32;
+            for event in renderer.get_surface_mut().events() {
+                match event {
+                    SurfaceEvent::Close => break 'main_loop,
+                    SurfaceEvent::Resize(
+                        size @ Vector2 {
+                            x: width,
+                            y: height,
+                        },
+                    ) => {
+                        renderer.resize(size);
+                        pixels = vec![Vector3::zero(); width * height];
+                        frames_since_movement = 0;
+                    }
+                    SurfaceEvent::MousePressed(button, Vector2 { x, y }) => 'mouse_press_handling: {
+                        if x < 0 && x >= width as isize && y < 0 && y >= height as isize {
+                            break 'mouse_press_handling;
+                        }
+
+                        let coord = (x as usize, height - y as usize - 1).into();
+                        let uv = Camera::get_uv(coord, size);
+                        let ray = camera.get_ray(uv, aspect);
+
+                        match button {
+                            MouseButton::Left => {
+                                if let Some((hit, _)) = get_closest_object(ray, &objects) {
+                                    objects.push(Object::Sphere {
+                                        center: hit.position + hit.normal * 0.5.into(),
+                                        radius: 0.5,
+                                        material: Material {
+                                            diffuse_color: (0.0, 0.0, 0.0).into(),
+                                            emit_color: (3.0, 3.0, 3.0).into(),
+                                            reflectiveness: 0.0,
+                                        },
+                                    });
+                                    frames_since_movement = 0;
+                                }
+                            }
+                            MouseButton::Right => {
+                                if let Some((_, index)) = get_closest_object(ray, &objects) {
+                                    if !matches!(objects[index], Object::Plane { .. }) {
+                                        objects.remove(index);
+                                        frames_since_movement = 0;
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         let size @ Vector2 {
             x: width,
             y: height,
         } = renderer.get_surface_mut().get_size();
         let aspect = width as f32 / height as f32;
-
-        for event in renderer.get_surface_mut().events() {
-            match event {
-                SurfaceEvent::Close => break 'main_loop,
-                SurfaceEvent::Resize(
-                    size @ Vector2 {
-                        x: width,
-                        y: height,
-                    },
-                ) => {
-                    renderer.resize(size);
-                    pixels = vec![Vector3::zero(); width * height];
-                    frames_since_movement = 0;
-                }
-                SurfaceEvent::MousePressed(button, Vector2 { x, y }) => 'mouse_press_handling: {
-                    if x < 0 && x >= width as isize && y < 0 && y >= height as isize {
-                        break 'mouse_press_handling;
-                    }
-
-                    let coord = (x as usize, height - y as usize - 1).into();
-                    let uv = Camera::get_uv(coord, size);
-                    let ray = camera.get_ray(uv, aspect);
-
-                    match button {
-                        MouseButton::Left => {
-                            if let Some((hit, _)) = get_closest_object(ray, &objects) {
-                                objects.push(Object::Sphere {
-                                    center: hit.position + hit.normal * 0.5.into(),
-                                    radius: 0.5,
-                                    material: Material {
-                                        diffuse_color: (0.0, 0.0, 0.0).into(),
-                                        emit_color: (3.0, 3.0, 3.0).into(),
-                                        reflectiveness: 0.0,
-                                    },
-                                });
-                                frames_since_movement = 0;
-                            }
-                        }
-                        MouseButton::Right => {
-                            if let Some((_, index)) = get_closest_object(ray, &objects) {
-                                if !matches!(objects[index], Object::Plane { .. }) {
-                                    objects.remove(index);
-                                    frames_since_movement = 0;
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                _ => {}
-            }
-        }
 
         // Update
         {
